@@ -1,0 +1,180 @@
+# ============================================
+# Alfred Project - Production Docker Compose
+# Production Environment
+# ============================================
+
+
+networks:
+  alfred-network:
+    driver: bridge
+    name: alfred-network-prod
+
+volumes:
+  postgres_data:
+    name: alfred-postgres-prod-data
+  redis_data:
+    name: alfred-redis-prod-data
+
+services:
+  # ============================================
+  # Infrastructure Services
+  # ============================================
+  
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: alfred-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-alfred_production}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - alfred-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: alfred-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - alfred-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============================================
+  # Backend Services
+  # ============================================
+  
+  # Alfred Identity Service
+  alfred-identity:
+    build:
+      context: ../alfred-identity-service
+      dockerfile: Dockerfile
+      target: final
+    image: alfred-identity:${VERSION:-latest}
+    pull_policy: build
+    container_name: alfred-identity-prod
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8100
+      # Database Configuration
+      - DB_PROVIDER=PostgreSQL
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-alfred_production}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      # Redis Configuration
+      - CACHE_PROVIDER=Redis
+      - REDIS_HOST=alfred-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # CORS Settings
+      - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
+      # App Settings
+      - APP_HOSTNAME=0.0.0.0
+      - APP_PORT=8100
+    networks:
+      - alfred-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Alfred Gateway (API Gateway)
+  alfred-gateway:
+    build:
+      context: ../alfred-gateway
+      dockerfile: Dockerfile
+      target: final
+    image: alfred-gateway:${VERSION:-latest}
+    pull_policy: build
+    container_name: alfred-gateway-prod
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8000
+      - AUTH_AUTHORITY=http://alfred-identity:8100
+      - AUTH_VALID_ISSUER=${JWT_ISSUER:-Alfred.Identity}
+      - AUTH_AUDIENCE=${JWT_AUDIENCE:-Alfred.API}
+      - IDENTITY_SERVICE_URL=http://alfred-identity:8100
+      - REDIS_HOST=alfred-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - Cors__AllowedOrigins__0=${FRONTEND_URL}
+      # YARP Cluster Addresses
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__Microsoft=Warning
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    networks:
+      - alfred-network
+    depends_on:
+      alfred-identity:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+

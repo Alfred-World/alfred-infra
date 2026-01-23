@@ -1,0 +1,35 @@
+# Environment files
+.env
+.env.prod
+.env.local
+.env.*.local
+
+# Logs
+nginx/logs/
+*.log
+
+# SSL Certificates
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Backups
+backups/
+*.sql
+*.dump
+
+# Docker volumes
+volumes/
+
+# MacOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backups Db
+backups/

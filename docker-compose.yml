@@ -1,0 +1,59 @@
+# ============================================
+# Alfred Project - Development Support Services
+# Only infrastructure services (postgres, redis)
+# For full stack deployment, use: docker-compose.prod.yml
+# ============================================
+
+networks:
+  alfred-network:
+    driver: bridge
+    name: alfred-network
+
+volumes:
+  postgres_data:
+    name: alfred-postgres-data
+  redis_data:
+    name: alfred-redis-data
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: alfred-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alfred}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alfred123}
+      POSTGRES_DB: ${POSTGRES_DB:-alfred_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - alfred-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alfred}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: alfred-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - alfred-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
