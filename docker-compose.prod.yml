@@ -22,12 +22,12 @@ services:
   
   # PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: alfred-postgres-prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-alfred_production}
+      POSTGRES_DB: ${POSTGRES_DB:-alfred_db}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -94,7 +94,7 @@ services:
       - DB_PROVIDER=PostgreSQL
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-alfred_production}
+      - DB_NAME=${POSTGRES_DB:-alfred_db}
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       # Redis Configuration

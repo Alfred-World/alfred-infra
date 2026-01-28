@@ -18,11 +18,11 @@ volumes:
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: alfred-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-alfred}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alfred123}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-alfred_db}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
@@ -32,7 +32,7 @@ services:
     networks:
       - alfred-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alfred}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
