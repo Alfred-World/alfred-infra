@@ -24,11 +24,17 @@ help: ## Show this help message
 	@echo "  make dev-tools        - Start dev tools (pgAdmin, Redis Commander)"
 	@echo ""
 	@echo "$(YELLOW)Production Commands:$(NC)"
-	@echo "  make prod             - Start production environment"
+	@echo "  make prod             - Start production environment with mTLS"
+	@echo "  make prod-deploy      - Deploy production with mTLS (recommended)"
 	@echo "  make prod-build       - Build production images"
 	@echo "  make prod-up          - Start production services"
 	@echo "  make prod-down        - Stop production services"
 	@echo "  make prod-logs        - View production logs"
+	@echo "  make prod-health      - Check production services health"
+	@echo ""
+	@echo "$(YELLOW)mTLS Commands:$(NC)"
+	@echo "  make mtls-certs       - Generate mTLS certificates (10-year validity)"
+	@echo "  make mtls-test        - Test mTLS configuration"
 	@echo ""
 	@echo "$(YELLOW)Database Commands:$(NC)"
 	@echo "  make db-backup        - Backup database"
@@ -81,10 +87,16 @@ dev-tools: ## Start development tools (pgAdmin, Redis Commander)
 # Production Environment
 # ============================================
 
-prod: init-env prod-build ## Start complete production environment
-	@echo "$(GREEN)Starting Alfred Production Environment...$(NC)"
+prod: init-env mtls-certs prod-build ## Start complete production environment with mTLS
+	@echo "$(GREEN)Starting Alfred Production Environment with mTLS...$(NC)"
+	@echo "MTLS_ENABLED=true" >> .env.prod
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-	@echo "$(GREEN)Production environment is running!$(NC)"
+	@echo "$(GREEN)Production environment is running with mTLS enabled!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Services:$(NC)"
+	@echo "  - Gateway:         http://localhost:8000"
+	@echo "  - Identity HTTPS:  https://alfred-identity:8101 (mTLS)"
+	@echo "  - Core HTTPS:      https://alfred-core:8201 (mTLS)"
 
 prod-build: ## Build production images
 	@echo "$(GREEN)Building production images...$(NC)"
@@ -102,9 +114,61 @@ prod-restart: ## Restart production services
 prod-logs: ## View production logs
 	docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f
 
+prod-deploy: init-env mtls-certs prod-build ## Deploy production with mTLS (one command)
+	@echo "$(GREEN)Deploying Production Environment with mTLS...$(NC)"
+	@grep -q "^MTLS_ENABLED=true" .env.prod 2>/dev/null || echo "MTLS_ENABLED=true" >> .env.prod
+	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+	@echo "$(GREEN)✅ Production deployed with mTLS enabled!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  1. Check health: make prod-health"
+	@echo "  2. View logs:    make prod-logs"
+	@echo "  3. Run migrations: make prod-migrate"
+
+# ============================================
+# mTLS Commands
+# ============================================
+
+mtls-certs: ## Generate mTLS certificates (10-year validity)
+	@if [ ! -f ./certificates/ca/ca.crt ]; then \
+		echo "$(GREEN)Generating mTLS certificates...$(NC)"; \
+		cd certificates && chmod +x generate-certs.sh && ./generate-certs.sh; \
+		echo "$(GREEN)✅ Certificates generated!$(NC)"; \
+	else \
+		echo "$(GREEN)✅ Certificates already exist$(NC)"; \
+	fi
+
+mtls-test: ## Test mTLS configuration
+	@echo "$(YELLOW)Testing mTLS configuration...$(NC)"
+	@echo ""
+	@echo "Testing Gateway health endpoint:"
+	@curl -s http://localhost:8000/health || echo "$(RED)Gateway not responding$(NC)"
+	@echo ""
+	@echo "Testing Identity health through Gateway:"
+	@curl -s http://localhost:8000/health/identity || echo "$(RED)Identity not responding$(NC)"
+	@echo ""
+	@echo "Testing Core health through Gateway:"
+	@curl -s http://localhost:8000/health/core || echo "$(RED)Core not responding$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ mTLS test completed$(NC)"
+
 # ============================================
 # Database Management
 # ============================================
+
+prod-migrate: ## Run database migrations (production)
+	@echo "$(GREEN)Running production database migrations...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll migrate
+	@echo "$(GREEN)Migrations completed!$(NC)"
+
+prod-seed: ## Seed database with initial data (production)
+	@echo "$(GREEN)Seeding production database...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll seed
+	@echo "$(GREEN)Seeding completed!$(NC)"
+
+prod-health: ## Check production services health
+	@echo "$(GREEN)Checking production service health...$(NC)"
+	@docker compose -f docker-compose.prod.yml --env-file .env.prod ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 migrate: ## Run database migrations
 	@echo "$(GREEN)Running database migrations...$(NC)"
@@ -235,9 +299,5 @@ health: ## Check health status of all services
 deploy-dev: clean dev ## Clean and deploy development environment
 	@echo "$(GREEN)Development environment deployed!$(NC)"
 
-deploy-prod: init-ssl prod-build prod-up ## Deploy production environment
-	@echo "$(GREEN)Production environment deployed!$(NC)"
-	@echo "$(YELLOW)Remember to:$(NC)"
-	@echo "  1. Run migrations: make migrate"
-	@echo "  2. Seed data: make seed"
-	@echo "  3. Configure DNS to point to your server"
+deploy-prod: prod-deploy ## Alias for prod-deploy (deprecated, use prod-deploy instead)
+	@echo "$(YELLOW)Note: Use 'make prod-deploy' instead$(NC)"

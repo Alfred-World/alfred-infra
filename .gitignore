@@ -33,3 +33,29 @@ volumes/
 
 # Backups Db
 backups/
+
+# mTLS Certificates
+# -----------------
+# DO NOT commit private keys to version control!
+
+# Private keys (NEVER commit these)
+*.key
+*.pfx
+*.p12
+
+# Certificate Signing Requests
+*.csr
+
+# OpenSSL serial file
+*.srl
+
+# OpenSSL config files are OK to commit
+!*.cnf
+
+# CA private key (ESPECIALLY sensitive)
+ca/ca.key
+
+# Generated certificates can be committed if desired
+# but private keys must NEVER be committed
+# Uncomment the following to also ignore .crt files:
+# *.crt

@@ -104,7 +104,99 @@ Docker-based infrastructure for the complete Alfred project ecosystem.
 
 ## 🏭 Production Deployment
 
-See full documentation in this README for production setup with SSL, Nginx, and security best practices.
+### Production with mTLS (Recommended)
+
+The production environment uses mutual TLS (mTLS) for secure service-to-service authentication:
+
+#### Quick Deploy
+
+```bash
+# One command to deploy everything with mTLS
+cd alfred-infra
+make prod-deploy
+
+# Check deployment status
+make prod-health
+
+# View logs
+make prod-logs
+```
+
+#### mTLS Architecture
+
+**Service Communication:**
+- **Gateway → Backend Services**: Gateway presents client certificate on all HTTPS requests
+- **Backend → Gateway**: Backend services validate certificates signed by internal CA
+- **Health Checks**: Use separate HTTP endpoints (8100/8200) without certificate requirements
+- **Application Traffic**: Uses HTTPS endpoints (8101/8201) with full mTLS protection
+
+**Ports:**
+
+| Service  | HTTP (Health) | HTTPS (mTLS) | External |
+|----------|---------------|--------------|----------|
+| Gateway  | -             | -            | 8000     |
+| Identity | 8100          | 8101         | -        |
+| Core     | 8200          | 8201         | -        |
+
+**Certificate Details:**
+- **Validity**: 10 years (no frequent rotation)
+- **Location**: `./certificates/` directory
+- **Components**: CA certificate, server certificates (Identity, Core), client certificate (Gateway)
+- **Auto-generation**: Certificates are generated automatically by `make prod-deploy`
+
+#### Manual Certificate Management
+
+```bash
+# Regenerate certificates (if needed)
+make mtls-certs
+
+# Test mTLS configuration
+make mtls-test
+```
+
+#### Testing Production Deployment
+
+```bash
+# Test Gateway health
+curl http://localhost:8000/health
+
+# Test backend health through Gateway (uses mTLS internally)
+curl http://localhost:8000/health/identity
+curl http://localhost:8000/health/core
+
+# Test application endpoints (protected by mTLS)
+curl http://localhost:8000/applications
+curl http://localhost:8000/users
+```
+
+#### Environment Configuration
+
+The `.env.prod` file controls mTLS settings:
+
+```bash
+# mTLS is enabled by default in production
+MTLS_ENABLED=true
+
+# Database credentials
+POSTGRES_USER=alfred
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=alfred_db
+
+# Frontend URL for CORS
+FRONTEND_URL=https://yourdomain.com
+```
+
+### Production without mTLS (Not Recommended)
+
+To disable mTLS in production (not recommended for security):
+
+```bash
+# Edit .env.prod
+echo "MTLS_ENABLED=false" > .env.prod
+
+# Deploy
+make prod-up
+```
 
 ## 📋 Available Commands
 
