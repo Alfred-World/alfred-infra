@@ -16,9 +16,9 @@ volumes:
     name: alfred-redis-data
 
 services:
-  # PostgreSQL Database
+  # TimescaleDB (PostgreSQL with time-series support)
   postgres:
-    image: postgres:17-alpine
+    image: timescale/timescaledb:latest-pg17
     container_name: alfred-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
