@@ -25,6 +25,7 @@ mkdir -p "$SCRIPT_DIR/ca"
 mkdir -p "$SCRIPT_DIR/gateway"
 mkdir -p "$SCRIPT_DIR/alfred-identity"
 mkdir -p "$SCRIPT_DIR/alfred-core"
+mkdir -p "$SCRIPT_DIR/alfred-notification"
 
 # ==============================================================================
 # 1. Generate CA Certificate (Certificate Authority)
@@ -243,6 +244,71 @@ openssl pkcs12 -export \
 echo -e "${GREEN}✓ Alfred Core Server Certificate generated${NC}"
 
 # ==============================================================================
+# 5. Generate Alfred Notification Server Certificate
+# ==============================================================================
+echo -e "\n${YELLOW}[5/5] Generating Alfred Notification Server Certificate...${NC}"
+
+# Create OpenSSL config for notification service
+cat > "$SCRIPT_DIR/alfred-notification/notification.cnf" << EOF
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+C = VN
+ST = HoChiMinh
+L = HoChiMinh
+O = Alfred
+OU = Notification
+CN = alfred-notification
+
+[req_ext]
+subjectAltName = @alt_names
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+
+[alt_names]
+DNS.1 = alfred-notification
+DNS.2 = localhost
+DNS.3 = notification.alfred.local
+IP.1 = 127.0.0.1
+EOF
+
+# Generate private key
+openssl genrsa -out "$SCRIPT_DIR/alfred-notification/notification.key" 2048
+
+# Generate CSR
+openssl req -new \
+    -key "$SCRIPT_DIR/alfred-notification/notification.key" \
+    -out "$SCRIPT_DIR/alfred-notification/notification.csr" \
+    -config "$SCRIPT_DIR/alfred-notification/notification.cnf"
+
+# Sign with CA
+openssl x509 -req \
+    -in "$SCRIPT_DIR/alfred-notification/notification.csr" \
+    -CA "$SCRIPT_DIR/ca/ca.crt" \
+    -CAkey "$SCRIPT_DIR/ca/ca.key" \
+    -CAcreateserial \
+    -out "$SCRIPT_DIR/alfred-notification/notification.crt" \
+    -days $VALIDITY_DAYS \
+    -sha256 \
+    -extensions req_ext \
+    -extfile "$SCRIPT_DIR/alfred-notification/notification.cnf"
+
+# Create PFX for .NET
+openssl pkcs12 -export \
+    -out "$SCRIPT_DIR/alfred-notification/notification.pfx" \
+    -inkey "$SCRIPT_DIR/alfred-notification/notification.key" \
+    -in "$SCRIPT_DIR/alfred-notification/notification.crt" \
+    -certfile "$SCRIPT_DIR/ca/ca.crt" \
+    -passout pass:
+
+echo -e "${GREEN}✓ Alfred Notification Server Certificate generated${NC}"
+
+# ==============================================================================
 # Summary
 # ==============================================================================
 echo -e "\n${GREEN}========================================${NC}"
@@ -256,6 +322,7 @@ echo -e ""
 echo -e "  Gateway Client Cert:  $SCRIPT_DIR/gateway/gateway-client.pfx"
 echo -e "  Identity Server Cert: $SCRIPT_DIR/alfred-identity/identity.pfx"
 echo -e "  Core Server Cert:     $SCRIPT_DIR/alfred-core/core.pfx"
+echo -e "  Notif Server Cert:    $SCRIPT_DIR/alfred-notification/notification.pfx"
 
 echo -e "\n${YELLOW}Certificate validity:${NC} $VALIDITY_DAYS days (≈10 years)"
 
@@ -269,5 +336,6 @@ chmod 600 "$SCRIPT_DIR/ca/ca.key"
 chmod 600 "$SCRIPT_DIR/gateway/gateway-client.key"
 chmod 600 "$SCRIPT_DIR/alfred-identity/identity.key"
 chmod 600 "$SCRIPT_DIR/alfred-core/core.key"
+chmod 600 "$SCRIPT_DIR/alfred-notification/notification.key"
 
 echo -e "\n${GREEN}✓ Permissions set on private keys (600)${NC}"

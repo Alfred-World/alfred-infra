@@ -1,0 +1,25 @@
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+C = VN
+ST = HoChiMinh
+L = HoChiMinh
+O = Alfred
+OU = Notification
+CN = alfred-notification
+
+[req_ext]
+subjectAltName = @alt_names
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+
+[alt_names]
+DNS.1 = alfred-notification
+DNS.2 = localhost
+DNS.3 = notification.alfred.local
+IP.1 = 127.0.0.1
