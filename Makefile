@@ -3,6 +3,11 @@
 # ============================================
 
 .PHONY: help dev prod build up down restart logs clean init-env init-ssl migrate seed
+.PHONY: dev-up dev-down dev-restart dev-logs dev-tools dev-db-backup dev-db-restore
+.PHONY: prod-build prod-up prod-down prod-restart prod-logs prod-deploy prod-migrate prod-seed prod-health
+.PHONY: prod-db-backup prod-db-restore
+.PHONY: shell-gateway shell-identity shell-core shell-notification shell-postgres shell-redis
+.PHONY: mtls-certs mtls-test stats health ps clean-all deploy-dev deploy-prod init-env init-ssl
 
 # Default environment
 ENV_FILE ?= .env
@@ -17,11 +22,13 @@ help: ## Show this help message
 	@echo "$(GREEN)Alfred Project - Docker Management$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Development Commands:$(NC)"
-	@echo "  make dev              - Start development environment"
+	@echo "  make dev              - Start dev infrastructure (PostgreSQL + Redis)"
 	@echo "  make dev-up           - Start dev services"
 	@echo "  make dev-down         - Stop dev services"
 	@echo "  make dev-logs         - View dev logs"
 	@echo "  make dev-tools        - Start dev tools (pgAdmin, Redis Commander)"
+	@echo "  make dev-db-backup    - Backup dev database"
+	@echo "  make dev-db-restore   - Restore dev database"
 	@echo ""
 	@echo "$(YELLOW)Production Commands:$(NC)"
 	@echo "  make prod             - Start production environment with mTLS"
@@ -31,18 +38,34 @@ help: ## Show this help message
 	@echo "  make prod-down        - Stop production services"
 	@echo "  make prod-logs        - View production logs"
 	@echo "  make prod-health      - Check production services health"
+	@echo "  make prod-migrate     - Run identity migrations (production)"
+	@echo "  make prod-seed        - Seed production database"
 	@echo ""
 	@echo "$(YELLOW)mTLS Commands:$(NC)"
 	@echo "  make mtls-certs       - Generate mTLS certificates (10-year validity)"
 	@echo "  make mtls-test        - Test mTLS configuration"
 	@echo ""
 	@echo "$(YELLOW)Database Commands:$(NC)"
-	@echo "  make db-backup        - Backup database"
-	@echo "  make db-restore       - Restore database from backup"
+	@echo "  make dev-db-backup    - Backup dev database"
+	@echo "  make dev-db-restore   - Restore dev database"
+	@echo "  make prod-db-backup   - Backup production database"
+	@echo "  make prod-db-restore  - Restore production database"
+	@echo ""
+	@echo "$(YELLOW)Shell Commands (Production):$(NC)"
+	@echo "  make shell-gateway    - Shell into gateway container"
+	@echo "  make shell-identity   - Shell into identity container"
+	@echo "  make shell-core       - Shell into core container"
+	@echo "  make shell-notification - Shell into notification container"
+	@echo "  make shell-postgres   - psql into dev postgres"
+	@echo "  make shell-redis      - redis-cli into dev redis"
 	@echo ""
 	@echo "$(YELLOW)Utility Commands:$(NC)"
-	@echo "  make build            - Build all services"
-	@echo "  make clean            - Clean up containers and volumes"
+	@echo "  make build            - Build all production service images"
+	@echo "  make ps               - Show running containers"
+	@echo "  make stats            - Show container resource usage"
+	@echo "  make health           - Check dev service health"
+	@echo "  make clean            - Clean up dev containers and volumes"
+	@echo "  make clean-all        - Deep clean (WARNING: removes ALL Alfred data)"
 	@echo "  make init-env         - Initialize environment files"
 
 # ============================================
@@ -55,11 +78,10 @@ dev: init-env ## Start complete development environment
 	@echo "$(GREEN)Development environment is running!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Services:$(NC)"
-	@echo "  - Gateway API:    http://localhost:8000"
-	@echo "  - Identity API:   http://localhost:5001"
 	@echo "  - PostgreSQL:     localhost:5432"
 	@echo "  - Redis:          localhost:6379"
 	@echo ""
+	@echo "$(YELLOW)Note: Backend services run locally via 'make run' in each service folder$(NC)"
 	@echo "$(YELLOW)Use 'make dev-tools' to start management tools$(NC)"
 
 dev-up: ## Start development services
@@ -170,14 +192,14 @@ prod-health: ## Check production services health
 	@echo "$(GREEN)Checking production service health...$(NC)"
 	@docker compose -f docker-compose.prod.yml --env-file .env.prod ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
-migrate: ## Run database migrations
-	@echo "$(GREEN)Running database migrations...$(NC)"
-	docker compose exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll migrate
+migrate: ## Run identity migrations (production)
+	@echo "$(GREEN)Running identity database migrations...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll migrate
 	@echo "$(GREEN)Migrations completed!$(NC)"
 
-seed: ## Seed database with initial data
-	@echo "$(GREEN)Seeding database...$(NC)"
-	docker compose exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll seed
+seed: ## Seed database with initial data (production)
+	@echo "$(GREEN)Seeding production database...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-identity dotnet ./cli/Alfred.Identity.Cli.dll seed
 	@echo "$(GREEN)Seeding completed!$(NC)"
 
 # Database Management - Development
@@ -218,21 +240,31 @@ prod-db-restore: ## Restore Production DB (specify BACKUP_FILE=filename.dump)
 # Build & Utility Commands
 # ============================================
 
-build: ## Build all services
-	@echo "$(GREEN)Building all services...$(NC)"
-	docker compose build --no-cache
+build: ## Build all production service images
+	@echo "$(GREEN)Building all production service images...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache
+	@echo "$(GREEN)Build completed!$(NC)"
 
 ps: ## Show running containers
 	@docker compose ps
 
-shell-gateway: ## Shell into gateway container
-	docker compose exec alfred-gateway sh
+shell-gateway: ## Shell into gateway container (production)
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-gateway sh
 
-shell-identity: ## Shell into identity container
-	docker compose exec alfred-identity sh
+shell-identity: ## Shell into identity container (production)
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-identity sh
 
-shell-postgres: ## Shell into postgres container
-	docker compose exec postgres psql -U ${POSTGRES_USER:-alfred} ${POSTGRES_DB:-alfred_db}
+shell-core: ## Shell into core container (production)
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-core sh
+
+shell-notification: ## Shell into notification container (production)
+	docker compose -f docker-compose.prod.yml --env-file .env.prod exec alfred-notification sh
+
+shell-postgres: ## Shell into postgres container (dev)
+	docker compose --env-file .env exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-alfred_db}
+
+shell-redis: ## Shell into redis container (dev)
+	docker compose --env-file .env exec redis redis-cli
 
 # ============================================
 # Cleanup Commands
@@ -249,8 +281,9 @@ clean-all: ## Deep clean (WARNING: removes ALL Alfred data)
 	@echo "$(RED)WARNING: This will remove all containers, volumes, and data!$(NC)"
 	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ] || exit 1
 	docker compose down -v --remove-orphans
-	docker volume rm alfred-postgres-data alfred-redis-data 2>/dev/null || true
-	docker image rm alfred-identity alfred-gateway 2>/dev/null || true
+	docker compose -f docker-compose.prod.yml --env-file .env.prod down -v --remove-orphans 2>/dev/null || true
+	docker volume rm alfred-postgres-data alfred-redis-data alfred-postgres-prod-data alfred-redis-prod-data 2>/dev/null || true
+	docker image rm alfred-identity alfred-core alfred-notification alfred-gateway 2>/dev/null || true
 	@echo "$(GREEN)Deep clean completed!$(NC)"
 
 # ============================================
