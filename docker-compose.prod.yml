@@ -244,9 +244,12 @@ services:
       - SMTP_FROM_NAME=${SMTP_FROM_NAME}
       # CORS
       - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
+      # App
+      - PORT=8300
       # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
-      - MTLS_PORT=8301
+      - MTLS_HTTP_PORT=8300
+      - MTLS_HTTPS_PORT=8301
       - MTLS_SERVER_CERT_PATH=/certs/alfred-notification/notification.pfx
       - MTLS_SERVER_CERT_PASSWORD=${MTLS_SERVER_CERT_PASSWORD}
       - MTLS_CA_CERT_PATH=/certs/ca/ca.crt
