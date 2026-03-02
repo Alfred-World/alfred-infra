@@ -349,10 +349,23 @@ echo -e "  2. Configure backend services to use HTTPS with client certificate va
 echo -e "  3. Configure Gateway YARP to use client certificate"
 
 # Set proper permissions
+# Private keys: 600 (only owner - they're embedded in .pfx anyway)
 chmod 600 "$SCRIPT_DIR/ca/ca.key"
 chmod 600 "$SCRIPT_DIR/gateway/gateway-client.key"
 chmod 600 "$SCRIPT_DIR/alfred-identity/identity.key"
 chmod 600 "$SCRIPT_DIR/alfred-core/core.key"
 chmod 600 "$SCRIPT_DIR/alfred-notification/notification.key"
 
-echo -e "\n${GREEN}✓ Permissions set on private keys (600)${NC}"
+# Public certs & PFCS12 packages: 644 (readable by all - needed by Docker containers)
+chmod 644 "$SCRIPT_DIR/ca/ca.crt"
+chmod 644 "$SCRIPT_DIR/ca/ca.srl" 2>/dev/null || true
+chmod 644 "$SCRIPT_DIR/gateway/gateway-client.crt"
+chmod 644 "$SCRIPT_DIR/gateway/gateway-client.pfx"
+chmod 644 "$SCRIPT_DIR/alfred-identity/identity.crt"
+chmod 644 "$SCRIPT_DIR/alfred-identity/identity.pfx"
+chmod 644 "$SCRIPT_DIR/alfred-core/core.crt"
+chmod 644 "$SCRIPT_DIR/alfred-core/core.pfx"
+chmod 644 "$SCRIPT_DIR/alfred-notification/notification.crt"
+chmod 644 "$SCRIPT_DIR/alfred-notification/notification.pfx"
+
+echo -e "\n${GREEN}✓ Permissions set - private keys (600) and public certs (644)${NC}"
