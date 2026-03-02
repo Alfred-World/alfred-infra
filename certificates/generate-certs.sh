@@ -54,8 +54,9 @@ fi
 # ==============================================================================
 echo -e "\n${YELLOW}[2/4] Generating Gateway Client Certificate...${NC}"
 
-# Create OpenSSL config for gateway
-cat > "$SCRIPT_DIR/gateway/gateway.cnf" << EOF
+if [ ! -f "$SCRIPT_DIR/gateway/gateway-client.pfx" ]; then
+    # Create OpenSSL config for gateway
+    cat > "$SCRIPT_DIR/gateway/gateway.cnf" << EOF
 [req]
 default_bits = 2048
 prompt = no
@@ -104,22 +105,26 @@ openssl x509 -req \
     -extfile "$SCRIPT_DIR/gateway/gateway.cnf"
 
 # Create PFX (PKCS#12) for .NET - without password for simplicity
-openssl pkcs12 -export \
-    -out "$SCRIPT_DIR/gateway/gateway-client.pfx" \
-    -inkey "$SCRIPT_DIR/gateway/gateway-client.key" \
-    -in "$SCRIPT_DIR/gateway/gateway-client.crt" \
-    -certfile "$SCRIPT_DIR/ca/ca.crt" \
-    -passout pass:
+    openssl pkcs12 -export \
+        -out "$SCRIPT_DIR/gateway/gateway-client.pfx" \
+        -inkey "$SCRIPT_DIR/gateway/gateway-client.key" \
+        -in "$SCRIPT_DIR/gateway/gateway-client.crt" \
+        -certfile "$SCRIPT_DIR/ca/ca.crt" \
+        -passout pass:
 
-echo -e "${GREEN}✓ Gateway Client Certificate generated${NC}"
+    echo -e "${GREEN}✓ Gateway Client Certificate generated${NC}"
+else
+    echo -e "${YELLOW}⚠ Gateway Client Certificate already exists, skipping...${NC}"
+fi
 
 # ==============================================================================
 # 3. Generate Alfred Identity Server Certificate
 # ==============================================================================
 echo -e "\n${YELLOW}[3/4] Generating Alfred Identity Server Certificate...${NC}"
 
-# Create OpenSSL config for identity service
-cat > "$SCRIPT_DIR/alfred-identity/identity.cnf" << EOF
+if [ ! -f "$SCRIPT_DIR/alfred-identity/identity.pfx" ]; then
+    # Create OpenSSL config for identity service
+    cat > "$SCRIPT_DIR/alfred-identity/identity.cnf" << EOF
 [req]
 default_bits = 2048
 prompt = no
@@ -169,22 +174,26 @@ openssl x509 -req \
     -extfile "$SCRIPT_DIR/alfred-identity/identity.cnf"
 
 # Create PFX for .NET
-openssl pkcs12 -export \
-    -out "$SCRIPT_DIR/alfred-identity/identity.pfx" \
-    -inkey "$SCRIPT_DIR/alfred-identity/identity.key" \
-    -in "$SCRIPT_DIR/alfred-identity/identity.crt" \
-    -certfile "$SCRIPT_DIR/ca/ca.crt" \
-    -passout pass:
+    openssl pkcs12 -export \
+        -out "$SCRIPT_DIR/alfred-identity/identity.pfx" \
+        -inkey "$SCRIPT_DIR/alfred-identity/identity.key" \
+        -in "$SCRIPT_DIR/alfred-identity/identity.crt" \
+        -certfile "$SCRIPT_DIR/ca/ca.crt" \
+        -passout pass:
 
-echo -e "${GREEN}✓ Alfred Identity Server Certificate generated${NC}"
+    echo -e "${GREEN}✓ Alfred Identity Server Certificate generated${NC}"
+else
+    echo -e "${YELLOW}⚠ Alfred Identity Server Certificate already exists, skipping...${NC}"
+fi
 
 # ==============================================================================
 # 4. Generate Alfred Core Server Certificate
 # ==============================================================================
 echo -e "\n${YELLOW}[4/4] Generating Alfred Core Server Certificate...${NC}"
 
-# Create OpenSSL config for core service
-cat > "$SCRIPT_DIR/alfred-core/core.cnf" << EOF
+if [ ! -f "$SCRIPT_DIR/alfred-core/core.pfx" ]; then
+    # Create OpenSSL config for core service
+    cat > "$SCRIPT_DIR/alfred-core/core.cnf" << EOF
 [req]
 default_bits = 2048
 prompt = no
@@ -234,22 +243,27 @@ openssl x509 -req \
     -extfile "$SCRIPT_DIR/alfred-core/core.cnf"
 
 # Create PFX for .NET
-openssl pkcs12 -export \
-    -out "$SCRIPT_DIR/alfred-core/core.pfx" \
-    -inkey "$SCRIPT_DIR/alfred-core/core.key" \
-    -in "$SCRIPT_DIR/alfred-core/core.crt" \
-    -certfile "$SCRIPT_DIR/ca/ca.crt" \
-    -passout pass:
+    openssl pkcs12 -export \
+        -out "$SCRIPT_DIR/alfred-core/core.pfx" \
+        -inkey "$SCRIPT_DIR/alfred-core/core.key" \
+        -in "$SCRIPT_DIR/alfred-core/core.crt" \
+        -certfile "$SCRIPT_DIR/ca/ca.crt" \
+        -passout pass:
 
-echo -e "${GREEN}✓ Alfred Core Server Certificate generated${NC}"
+    echo -e "${GREEN}✓ Alfred Core Server Certificate generated${NC}"
+else
+    echo -e "${YELLOW}⚠ Alfred Core Server Certificate already exists, skipping...${NC}"
+fi
 
 # ==============================================================================
 # 5. Generate Alfred Notification Server Certificate
 # ==============================================================================
 echo -e "\n${YELLOW}[5/5] Generating Alfred Notification Server Certificate...${NC}"
 
-# Create OpenSSL config for notification service
-cat > "$SCRIPT_DIR/alfred-notification/notification.cnf" << EOF
+if [ ! -f "$SCRIPT_DIR/alfred-notification/notification.pfx" ]; then
+
+    # Create OpenSSL config for notification service
+    cat > "$SCRIPT_DIR/alfred-notification/notification.cnf" << EOF
 [req]
 default_bits = 2048
 prompt = no
@@ -277,36 +291,39 @@ DNS.3 = notification.alfred.local
 IP.1 = 127.0.0.1
 EOF
 
-# Generate private key
-openssl genrsa -out "$SCRIPT_DIR/alfred-notification/notification.key" 2048
+    # Generate private key
+    openssl genrsa -out "$SCRIPT_DIR/alfred-notification/notification.key" 2048
 
-# Generate CSR
-openssl req -new \
-    -key "$SCRIPT_DIR/alfred-notification/notification.key" \
-    -out "$SCRIPT_DIR/alfred-notification/notification.csr" \
-    -config "$SCRIPT_DIR/alfred-notification/notification.cnf"
+    # Generate CSR
+    openssl req -new \
+        -key "$SCRIPT_DIR/alfred-notification/notification.key" \
+        -out "$SCRIPT_DIR/alfred-notification/notification.csr" \
+        -config "$SCRIPT_DIR/alfred-notification/notification.cnf"
 
-# Sign with CA
-openssl x509 -req \
-    -in "$SCRIPT_DIR/alfred-notification/notification.csr" \
-    -CA "$SCRIPT_DIR/ca/ca.crt" \
-    -CAkey "$SCRIPT_DIR/ca/ca.key" \
-    -CAcreateserial \
-    -out "$SCRIPT_DIR/alfred-notification/notification.crt" \
-    -days $VALIDITY_DAYS \
-    -sha256 \
-    -extensions req_ext \
-    -extfile "$SCRIPT_DIR/alfred-notification/notification.cnf"
+    # Sign with CA
+    openssl x509 -req \
+        -in "$SCRIPT_DIR/alfred-notification/notification.csr" \
+        -CA "$SCRIPT_DIR/ca/ca.crt" \
+        -CAkey "$SCRIPT_DIR/ca/ca.key" \
+        -CAcreateserial \
+        -out "$SCRIPT_DIR/alfred-notification/notification.crt" \
+        -days $VALIDITY_DAYS \
+        -sha256 \
+        -extensions req_ext \
+        -extfile "$SCRIPT_DIR/alfred-notification/notification.cnf"
 
-# Create PFX for .NET
-openssl pkcs12 -export \
-    -out "$SCRIPT_DIR/alfred-notification/notification.pfx" \
-    -inkey "$SCRIPT_DIR/alfred-notification/notification.key" \
-    -in "$SCRIPT_DIR/alfred-notification/notification.crt" \
-    -certfile "$SCRIPT_DIR/ca/ca.crt" \
-    -passout pass:
+    # Create PFX for .NET
+    openssl pkcs12 -export \
+        -out "$SCRIPT_DIR/alfred-notification/notification.pfx" \
+        -inkey "$SCRIPT_DIR/alfred-notification/notification.key" \
+        -in "$SCRIPT_DIR/alfred-notification/notification.crt" \
+        -certfile "$SCRIPT_DIR/ca/ca.crt" \
+        -passout pass:
 
-echo -e "${GREEN}✓ Alfred Notification Server Certificate generated${NC}"
+    echo -e "${GREEN}✓ Alfred Notification Server Certificate generated${NC}"
+else
+    echo -e "${YELLOW}⚠ Alfred Notification Server Certificate already exists, skipping...${NC}"
+fi
 
 # ==============================================================================
 # Summary

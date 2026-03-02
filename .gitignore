@@ -55,7 +55,5 @@ backups/
 # CA private key (ESPECIALLY sensitive)
 ca/ca.key
 
-# Generated certificates can be committed if desired
-# but private keys must NEVER be committed
-# Uncomment the following to also ignore .crt files:
-# *.crt
+# Generated certificates - DO NOT commit to git
+*.crt
