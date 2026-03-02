@@ -139,7 +139,6 @@ prod-logs: ## View production logs
 
 prod-deploy: init-env mtls-certs prod-build ## Deploy full stack with mTLS (one command)
 	@echo "$(GREEN)Deploying Full Stack Production Environment...$(NC)"
-	@grep -q "^MTLS_ENABLED=true" .env.prod 2>/dev/null || echo "MTLS_ENABLED=true" >> .env.prod
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 	@echo "$(GREEN)✅ Production deployed! (4 BE + 2 FE + Infra)$(NC)"
 	@echo ""
