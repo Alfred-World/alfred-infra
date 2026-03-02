@@ -1,8 +1,7 @@
 # ============================================
 # Alfred Project - Production Docker Compose
-# Production Environment with mTLS Support
+# Full Stack: 4 Backend + 2 Frontend + Infra
 # ============================================
-
 
 networks:
   alfred-network:
@@ -19,7 +18,7 @@ services:
   # ============================================
   # Infrastructure Services
   # ============================================
-  
+
   # TimescaleDB (PostgreSQL with time-series support)
   postgres:
     image: timescale/timescaledb:latest-pg17
@@ -30,8 +29,9 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     ports:
-      - "127.0.0.1:5432:5432"  # Only accessible via SSH tunnel
+      - "127.0.0.1:${POSTGRES_PORT:-8110}:5432"
     networks:
       - alfred-network
     healthcheck:
@@ -76,9 +76,9 @@ services:
           memory: 256M
 
   # ============================================
-  # Backend Services
+  # Backend Services (4)
   # ============================================
-  
+
   # Alfred Identity Service
   alfred-identity:
     build:
@@ -90,27 +90,30 @@ services:
     container_name: alfred-identity-prod
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      # Database Configuration
+      # Database — dedicated DB
       - DB_PROVIDER=PostgreSQL
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-alfred_db}
+      - DB_NAME=${IDENTITY_DB_NAME:-alfred_identity}
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      # Redis Configuration
+      # Redis
       - CACHE_PROVIDER=Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      # CORS Settings
+      # CORS
       - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
-      # App Settings
+      # App
       - APP_HOSTNAME=0.0.0.0
       - APP_PORT=8100
-      # JWT Configuration
+      # JWT / SSO
       - Jwt__Issuer=${GATEWAY_URL:-https://gateway.test}
       - Jwt__Audience=${JWT_AUDIENCE:-alfred-ecosystem}
-      # mTLS Configuration
+      - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-gateway.test}
+      - Urls__Gateway=${GATEWAY_URL:-https://gateway.test}
+      - Urls__SsoWeb=${SSO_WEB_URL:-https://sso.test}
+      # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
       - MTLS_SERVER_CERT_PATH=/certs/alfred-identity/identity.pfx
       - MTLS_SERVER_CERT_PASSWORD=
@@ -154,24 +157,30 @@ services:
     container_name: alfred-core-prod
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      # Database Configuration
+      # Database — dedicated DB
       - DB_PROVIDER=PostgreSQL
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-alfred_db}
+      - DB_NAME=${CORE_DB_NAME:-alfred_core}
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      # Redis Configuration
+      # Redis
       - CACHE_PROVIDER=Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      # CORS Settings
+      # CORS
       - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
-      # App Settings
+      # App
       - APP_HOSTNAME=0.0.0.0
       - APP_PORT=8200
-      # mTLS Configuration
+      # Cloudflare R2 Storage
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-alfred}
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
       - MTLS_SERVER_CERT_PATH=/certs/alfred-core/core.pfx
       - MTLS_SERVER_CERT_PASSWORD=
@@ -215,26 +224,27 @@ services:
     container_name: alfred-notification-prod
     environment:
       - NODE_ENV=production
-      # Database Configuration
+      # Database — dedicated DB
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USERNAME=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_DATABASE=${POSTGRES_DB:-alfred_db}
-      # Redis Configuration
+      - DB_DATABASE=${NOTIFICATION_DB_NAME:-alfred_notification}
+      # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      # SMTP Configuration
+      - REDIS_EMAIL_QUEUE_KEY=alfred:notifications:email
+      # SMTP
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME}
-      # CORS Settings
+      # CORS
       - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
-      # mTLS Configuration
+      # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
       - MTLS_PORT=8301
       - MTLS_SERVER_CERT_PATH=/certs/alfred-notification/notification.pfx
@@ -265,7 +275,7 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Alfred Gateway (API Gateway)
+  # Alfred Gateway (API Gateway / Reverse Proxy)
   alfred-gateway:
     build:
       context: ../alfred-gateway
@@ -281,21 +291,20 @@ services:
       - AUTH_VALID_ISSUER=${GATEWAY_URL:-https://gateway.test}
       - AUTH_AUDIENCE=${JWT_AUDIENCE:-alfred-ecosystem}
       - IDENTITY_SERVICE_URL=http://alfred-identity:8100
+      # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      # CORS Settings (comma-separated)
+      # CORS (comma-separated)
       - CORS_ALLOWED_ORIGINS=${FRONTEND_URL}
-      # mTLS Configuration
+      # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
       - MTLS_CLIENT_CERT_PATH=/certs/gateway/gateway-client.pfx
       - MTLS_CLIENT_CERT_PASSWORD=
       - MTLS_CA_CERT_PATH=/certs/ca/ca.crt
       - MTLS_SKIP_SERVER_CERT_VALIDATION=false
-      # YARP Cluster Addresses
+      # Logging
       - Logging__LogLevel__Default=Information
-      - Logging__LogLevel__Microsoft.AspNetCore.Authentication=Debug
-      - Logging__LogLevel__Microsoft.IdentityModel=Debug
     volumes:
       - ./certificates:/certs:ro
     networks:
@@ -305,13 +314,106 @@ services:
       - alfred-core
       - alfred-notification
     ports:
-      - "8000:8000"
+      - "${GATEWAY_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================
+  # Frontend Services (2)
+  # ============================================
+
+  # Alfred Identity Web (SSO Portal)
+  alfred-identity-web:
+    build:
+      context: ../alfred-identity-web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${SSO_WEB_URL:-https://sso.test}
+        NEXT_PUBLIC_GATEWAY_URL: ${GATEWAY_URL:-https://gateway.test}
+        NEXT_PUBLIC_SSO_URL: ${SSO_WEB_URL:-https://sso.test}
+        NEXT_PUBLIC_CORE_URL: ${CORE_WEB_URL:-https://core.test}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${SSO_OIDC_CLIENT_ID:-sso_web}
+    image: alfred-identity-web:${VERSION:-latest}
+    pull_policy: build
+    container_name: alfred-identity-web-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - INTERNAL_GATEWAY_URL=http://alfred-gateway:8000
+      - NEXTAUTH_URL=${SSO_WEB_URL:-https://sso.test}
+      - NEXTAUTH_SECRET=${SSO_NEXTAUTH_SECRET}
+      - OIDC_CLIENT_ID=${SSO_OIDC_CLIENT_ID:-sso_web}
+      - OIDC_CLIENT_SECRET=${SSO_OIDC_CLIENT_SECRET}
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    networks:
+      - alfred-network
+    depends_on:
+      - alfred-gateway
+    ports:
+      - "${SSO_WEB_PORT:-7100}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Alfred Core Web (Admin / App Portal)
+  alfred-core-web:
+    build:
+      context: ../alfred-core-web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${CORE_WEB_URL:-https://core.test}
+        NEXT_PUBLIC_GATEWAY_URL: ${GATEWAY_URL:-https://gateway.test}
+        NEXT_PUBLIC_SSO_URL: ${SSO_WEB_URL:-https://sso.test}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${CORE_OIDC_CLIENT_ID:-core_web}
+    image: alfred-core-web:${VERSION:-latest}
+    pull_policy: build
+    container_name: alfred-core-web-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - INTERNAL_GATEWAY_URL=http://alfred-gateway:8000
+      - NEXTAUTH_URL=${CORE_WEB_URL:-https://core.test}
+      - NEXTAUTH_SECRET=${CORE_NEXTAUTH_SECRET}
+      - OIDC_CLIENT_ID=${CORE_OIDC_CLIENT_ID:-core_web}
+      - OIDC_CLIENT_SECRET=${CORE_OIDC_CLIENT_SECRET}
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    networks:
+      - alfred-network
+    depends_on:
+      - alfred-gateway
+    ports:
+      - "${CORE_WEB_PORT:-7200}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: always
     deploy:
       resources:
