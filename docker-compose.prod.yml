@@ -108,8 +108,8 @@ services:
       - APP_HOSTNAME=0.0.0.0
       - APP_PORT=8100
       # JWT / SSO
-      - Jwt__Issuer=${GATEWAY_URL:-https://gateway.test}
-      - Jwt__Audience=${JWT_AUDIENCE:-alfred-ecosystem}
+      - JWT_ISSUER=${GATEWAY_URL:-https://gateway.test}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-alfred-ecosystem}
       - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-gateway.test}
       - Urls__Gateway=${GATEWAY_URL:-https://gateway.test}
       - Urls__SsoWeb=${SSO_WEB_URL:-https://sso.test}
