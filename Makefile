@@ -13,6 +13,10 @@
 # Default environment
 ENV_FILE ?= .env
 
+# Enable BuildKit for faster builds (cache mounts, parallel stages)
+export DOCKER_BUILDKIT := 1
+export COMPOSE_DOCKER_CLI_BUILD := 1
+
 # Colors for output
 RED := \033[0;31m
 GREEN := \033[0;32m
@@ -131,8 +135,11 @@ prod: init-env mtls-certs prod-build ## Start complete production environment wi
 	@echo "  - Core HTTPS:      https://alfred-core:8201 (mTLS)"
 
 prod-build: ## Build production images (uses Docker layer cache for speed)
-	@echo "$(GREEN)Building production images...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build
+	@echo "$(GREEN)Building production images (with cache)...$(NC)"
+	@START=$$(date +%s); \
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build --parallel; \
+	END=$$(date +%s); \
+	echo "$(GREEN)Build completed in $$(( END - START ))s$(NC)"
 
 prod-build-clean: ## Force full rebuild of production images (ignores cache)
 	@echo "$(GREEN)Force rebuilding production images (no cache)...$(NC)"
@@ -372,39 +379,39 @@ health: ## Check health status of all services
 
 redeploy-identity: ## Rebuild & redeploy Identity service only (no downtime for other services)
 	@echo "$(GREEN)Redeploying alfred-identity...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-identity
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-identity
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-identity
 	@echo "$(GREEN)✅ alfred-identity redeployed!$(NC)"
 	@echo "$(YELLOW)Tip: run 'make prod-migrate' if there are new DB migrations$(NC)"
 
 redeploy-core: ## Rebuild & redeploy Core service only
 	@echo "$(GREEN)Redeploying alfred-core...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-core
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-core
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-core
 	@echo "$(GREEN)✅ alfred-core redeployed!$(NC)"
 	@echo "$(YELLOW)Tip: run 'make prod-migrate' if there are new DB migrations$(NC)"
 
 redeploy-notification: ## Rebuild & redeploy Notification service only
 	@echo "$(GREEN)Redeploying alfred-notification...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-notification
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-notification
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-notification
 	@echo "$(GREEN)✅ alfred-notification redeployed!$(NC)"
 
 redeploy-gateway: ## Rebuild & redeploy Gateway service only
 	@echo "$(GREEN)Redeploying alfred-gateway...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-gateway
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-gateway
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-gateway
 	@echo "$(GREEN)✅ alfred-gateway redeployed!$(NC)"
 
 redeploy-identity-web: ## Rebuild & redeploy Identity Web (SSO portal) only
 	@echo "$(GREEN)Redeploying alfred-identity-web...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-identity-web
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-identity-web
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-identity-web
 	@echo "$(GREEN)✅ alfred-identity-web redeployed!$(NC)"
 
 redeploy-core-web: ## Rebuild & redeploy Core Web (admin portal) only
 	@echo "$(GREEN)Redeploying alfred-core-web...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache alfred-core-web
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build alfred-core-web
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps alfred-core-web
 	@echo "$(GREEN)✅ alfred-core-web redeployed!$(NC)"
 
