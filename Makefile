@@ -4,7 +4,7 @@
 
 .PHONY: help dev prod build up down restart logs clean init-env init-ssl migrate seed
 .PHONY: dev-up dev-down dev-restart dev-logs dev-tools dev-db-backup dev-db-restore
-.PHONY: prod-build prod-up prod-down prod-restart prod-logs prod-deploy prod-migrate prod-seed prod-health
+.PHONY: prod-build prod-build-clean prod-up prod-down prod-restart prod-logs prod-deploy prod-deploy-clean prod-migrate prod-seed prod-health
 .PHONY: prod-db-backup prod-db-restore prod-init-db
 .PHONY: shell-gateway shell-identity shell-core shell-notification shell-postgres shell-redis
 .PHONY: mtls-certs mtls-test stats health ps clean-all deploy-dev deploy-prod init-env init-ssl
@@ -130,8 +130,12 @@ prod: init-env mtls-certs prod-build ## Start complete production environment wi
 	@echo "  - Identity HTTPS:  https://alfred-identity:8101 (mTLS)"
 	@echo "  - Core HTTPS:      https://alfred-core:8201 (mTLS)"
 
-prod-build: ## Build production images
+prod-build: ## Build production images (uses Docker layer cache for speed)
 	@echo "$(GREEN)Building production images...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod build
+
+prod-build-clean: ## Force full rebuild of production images (ignores cache)
+	@echo "$(GREEN)Force rebuilding production images (no cache)...$(NC)"
 	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache
 
 prod-up: ## Start production services
@@ -146,7 +150,7 @@ prod-restart: ## Restart production services
 prod-logs: ## View production logs
 	docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f
 
-prod-deploy: init-env mtls-certs prod-build ## Deploy full stack with mTLS (one command)
+prod-deploy: init-env mtls-certs prod-build ## Deploy full stack using Docker layer cache (fast)
 	@echo "$(GREEN)Deploying Full Stack Production Environment...$(NC)"
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 	@echo "$(GREEN)✅ Production deployed! (4 BE + 2 FE + Infra)$(NC)"
@@ -163,6 +167,11 @@ prod-deploy: init-env mtls-certs prod-build ## Deploy full stack with mTLS (one 
 	@echo "  1. Check health:  make prod-health"
 	@echo "  2. View logs:     make prod-logs"
 	@echo "  3. Run migrations: make prod-migrate"
+
+prod-deploy-clean: init-env mtls-certs prod-build-clean ## Deploy full stack with forced full rebuild (no cache)
+	@echo "$(GREEN)Deploying Full Stack (clean build, no cache)...$(NC)"
+	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+	@echo "$(GREEN)✅ Production deployed (clean build)!$(NC)"
 
 # ============================================
 # mTLS Commands

@@ -113,6 +113,8 @@ services:
       - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-gateway.test}
       - Urls__Gateway=${GATEWAY_URL:-https://gateway.test}
       - Urls__SsoWeb=${SSO_WEB_URL:-https://sso.test}
+      - Urls__CoreWeb=${CORE_WEB_URL:-https://core.test}
+      - Urls__IdentityWeb=${IDENTITY_WEB_URL:-https://sso.test}
       # mTLS
       - MTLS_ENABLED=${MTLS_ENABLED:-false}
       - MTLS_SERVER_CERT_PATH=/certs/alfred-identity/identity.pfx
