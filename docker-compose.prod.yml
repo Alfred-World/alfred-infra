@@ -44,10 +44,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: '1.5'
           memory: 2G
         reservations:
-          cpus: '1'
+          cpus: '0.5'
           memory: 1G
 
   # Redis Cache
@@ -69,11 +69,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
+          cpus: '0.25'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   # ============================================
   # Backend Services (4)
@@ -142,11 +142,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 1G
+          cpus: '1.0'
+          memory: 768M
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.25'
+          memory: 384M
 
   # Alfred Core Service
   alfred-core:
@@ -209,11 +209,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 1G
+          cpus: '1.0'
+          memory: 768M
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.25'
+          memory: 384M
 
   # Alfred Notification Service
   alfred-notification:
@@ -274,11 +274,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.5'
+          memory: 384M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.1'
+          memory: 192M
 
   # Alfred Gateway (API Gateway / Reverse Proxy)
   alfred-gateway:
@@ -330,11 +330,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.5'
+          memory: 384M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.1'
+          memory: 192M
 
   # ============================================
   # Frontend Services (2)
@@ -363,6 +363,10 @@ services:
       - OIDC_CLIENT_ID=${SSO_OIDC_CLIENT_ID:-sso_web}
       - OIDC_CLIENT_SECRET=${SSO_OIDC_CLIENT_SECRET}
       - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # NEXT_PUBLIC_* must also be set at runtime for SSR (bracket notation bypasses build-time inlining)
+      - NEXT_PUBLIC_APP_URL=${SSO_WEB_URL:-https://sso.test}
+      - NEXT_PUBLIC_GATEWAY_URL=${GATEWAY_URL:-https://gateway.test}
+      - NEXT_PUBLIC_OAUTH_CLIENT_ID=${SSO_OIDC_CLIENT_ID:-sso_web}
     networks:
       - alfred-network
     depends_on:
@@ -379,11 +383,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.5'
+          memory: 384M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.1'
+          memory: 192M
 
   # Alfred Core Web (Admin / App Portal)
   alfred-core-web:
@@ -407,6 +411,11 @@ services:
       - OIDC_CLIENT_ID=${CORE_OIDC_CLIENT_ID:-core_web}
       - OIDC_CLIENT_SECRET=${CORE_OIDC_CLIENT_SECRET}
       - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # NEXT_PUBLIC_* must also be set at runtime for SSR (bracket notation bypasses build-time inlining)
+      - NEXT_PUBLIC_APP_URL=${CORE_WEB_URL:-https://core.test}
+      - NEXT_PUBLIC_GATEWAY_URL=${GATEWAY_URL:-https://gateway.test}
+      - NEXT_PUBLIC_SSO_URL=${SSO_WEB_URL:-https://sso.test}
+      - NEXT_PUBLIC_OAUTH_CLIENT_ID=${CORE_OIDC_CLIENT_ID:-core_web}
     networks:
       - alfred-network
     depends_on:
@@ -423,9 +432,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.5'
+          memory: 384M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.1'
+          memory: 192M
 
