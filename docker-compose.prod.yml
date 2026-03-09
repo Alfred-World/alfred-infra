@@ -296,6 +296,11 @@ services:
       - AUTH_VALID_ISSUER=${GATEWAY_URL:-https://gateway.test}
       - AUTH_AUDIENCE=${JWT_AUDIENCE:-alfred-ecosystem}
       - IDENTITY_SERVICE_URL=http://alfred-identity:8100
+      - CORE_SERVICE_URL=http://alfred-core:8200
+      - NOTIFICATION_SERVICE_URL=http://alfred-notification:8300
+      # mTLS service URLs — used when MTLS_ENABLED=true (must point to HTTPS ports)
+      - IDENTITY_SERVICE_MTLS_URL=https://alfred-identity:8101
+      - CORE_SERVICE_MTLS_URL=https://alfred-core:8201
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
