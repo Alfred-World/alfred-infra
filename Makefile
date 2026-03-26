@@ -248,41 +248,64 @@ seed: ## Seed database with initial data (production)
 	@echo "$(GREEN)Seeding completed!$(NC)"
 
 # Database Management - Development
-dev-db-backup: ## Backup Development DB
-	@echo "$(GREEN)Creating Development DB backup (Custom Format)...$(NC)"
+dev-db-backup: ## Backup all 3 dev DBs (reads DB names from .env)
+	@echo "$(GREEN)Creating Development DB backups...$(NC)"
 	@mkdir -p ./backups/dev
-	docker compose --env-file .env exec -T postgres sh -c 'pg_dump -Fc -U $$POSTGRES_USER $$POSTGRES_DB' > ./backups/dev/backup-$(shell date +%Y%m%d-%H%M%S).dump
-	@echo "$(GREEN)Backup created in ./backups/dev/$(NC)"
+	@set -a && . ./.env && set +a && \
+		TS=$(shell date +%Y%m%d-%H%M%S) && \
+		for db in $${IDENTITY_DB_NAME:-alfred_identity} $${CORE_DB_NAME:-alfred_core} $${NOTIFICATION_DB_NAME:-alfred_notification}; do \
+			echo "\033[1;33m  → Backing up $$db...\033[0m"; \
+			docker compose --env-file .env exec -T postgres pg_dump -Fc -U $${POSTGRES_USER:-postgres} $$db > ./backups/dev/$$db-$$TS.dump; \
+		done
+	@echo "$(GREEN)✅ All backups created in ./backups/dev/$(NC)"
 
-dev-db-restore: ## Restore Development DB (specify BACKUP_FILE=filename.dump)
-	@if [ -z "$(BACKUP_FILE)" ]; then \
-		echo "$(RED)Error: Please specify BACKUP_FILE=filename.dump$(NC)"; \
+dev-db-restore: ## Restore a dev DB from dump. Usage: make dev-db-restore SERVICE=identity|core|notification BACKUP_FILE=filename.dump
+	@if [ -z "$(SERVICE)" ] || [ -z "$(BACKUP_FILE)" ]; then \
+		echo "$(RED)Usage: make dev-db-restore SERVICE=identity|core|notification BACKUP_FILE=filename.dump$(NC)"; \
 		exit 1; \
 	fi
-	@echo "$(YELLOW)Restoring Development DB from $(BACKUP_FILE)...$(NC)"
-	docker compose --env-file .env exec -T postgres sh -c 'pg_restore --clean --if-exists -U $$POSTGRES_USER -d $$POSTGRES_DB' < ./backups/dev/$(BACKUP_FILE)
-	@echo "$(GREEN)Database restored!$(NC)"
+	@set -a && . ./.env && set +a && \
+		case "$(SERVICE)" in \
+			identity)     DB=$${IDENTITY_DB_NAME:-alfred_identity} ;; \
+			core)         DB=$${CORE_DB_NAME:-alfred_core} ;; \
+			notification) DB=$${NOTIFICATION_DB_NAME:-alfred_notification} ;; \
+			*) echo "$(RED)Unknown SERVICE: $(SERVICE). Use identity|core|notification$(NC)"; exit 1 ;; \
+		esac && \
+		echo "\033[1;33mRestoring $$DB from $(BACKUP_FILE)...\033[0m" && \
+		docker compose --env-file .env exec postgres psql -U $${POSTGRES_USER:-postgres} -d $$DB -c "SELECT timescaledb_pre_restore();" 2>/dev/null || true && \
+		docker compose --env-file .env exec -T postgres pg_restore --no-acl --no-owner -U $${POSTGRES_USER:-postgres} -d $$DB < ./backups/dev/$(BACKUP_FILE) ; \
+		docker compose --env-file .env exec postgres psql -U $${POSTGRES_USER:-postgres} -d $$DB -c "SELECT timescaledb_post_restore();" 2>/dev/null || true
+	@echo "$(GREEN)✅ Database restored!$(NC)"
 
 # Database Management - Production
-prod-db-backup: ## Backup all Production DBs
+prod-db-backup: ## Backup all 3 prod DBs (reads DB names from .env.prod)
 	@echo "$(GREEN)Creating Production DB backups...$(NC)"
 	@mkdir -p ./backups/prod
-	@for db in alfred_identity alfred_core alfred_notification; do \
-		echo "$(YELLOW)  → Backing up $$db...$(NC)"; \
-		docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres sh -c "pg_dump -Fc -U \$$POSTGRES_USER $$db" > ./backups/prod/$$db-$(shell date +%Y%m%d-%H%M%S).dump; \
-	done
+	@set -a && . ./.env.prod && set +a && \
+		TS=$(shell date +%Y%m%d-%H%M%S) && \
+		for db in $${IDENTITY_DB_NAME:-alfred_identity} $${CORE_DB_NAME:-alfred_core} $${NOTIFICATION_DB_NAME:-alfred_notification}; do \
+			echo "\033[1;33m  → Backing up $$db...\033[0m"; \
+			docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres pg_dump -Fc -U $${POSTGRES_USER:-postgres} $$db > ./backups/prod/$$db-$$TS.dump; \
+		done
 	@echo "$(GREEN)✅ All backups created in ./backups/prod/$(NC)"
 
-prod-db-restore: ## Restore Production DB (specify BACKUP_FILE=filename.dump)
-	@if [ -z "$(BACKUP_FILE)" ]; then \
-		echo "$(RED)Error: Please specify BACKUP_FILE=filename.dump$(NC)"; \
+prod-db-restore: ## Restore a prod DB from dump. Usage: make prod-db-restore SERVICE=identity|core|notification BACKUP_FILE=filename.dump
+	@if [ -z "$(SERVICE)" ] || [ -z "$(BACKUP_FILE)" ]; then \
+		echo "$(RED)Usage: make prod-db-restore SERVICE=identity|core|notification BACKUP_FILE=filename.dump$(NC)"; \
 		exit 1; \
 	fi
-	@echo "$(RED)WARNING: You are about to restore the PRODUCTION database!$(NC)"
+	@echo "$(RED)WARNING: You are about to restore a PRODUCTION database!$(NC)"
 	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ] || exit 1
-	@echo "$(YELLOW)Restoring Production DB from $(BACKUP_FILE)...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres sh -c 'pg_restore --clean --if-exists -U $$POSTGRES_USER -d $$POSTGRES_DB' < ./backups/prod/$(BACKUP_FILE)
-	@echo "$(GREEN)Database restored!$(NC)"
+	@set -a && . ./.env.prod && set +a && \
+		case "$(SERVICE)" in \
+			identity)     DB=$${IDENTITY_DB_NAME:-alfred_identity} ;; \
+			core)         DB=$${CORE_DB_NAME:-alfred_core} ;; \
+			notification) DB=$${NOTIFICATION_DB_NAME:-alfred_notification} ;; \
+			*) echo "$(RED)Unknown SERVICE: $(SERVICE). Use identity|core|notification$(NC)"; exit 1 ;; \
+		esac && \
+		echo "\033[1;33mRestoring $$DB from $(BACKUP_FILE)...\033[0m" && \
+		docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres pg_restore --no-acl --no-owner -U $${POSTGRES_USER:-postgres} -d $$DB < ./backups/prod/$(BACKUP_FILE)
+	@echo "$(GREEN)✅ Database restored!$(NC)"
 
 # ============================================
 # Build & Utility Commands
