@@ -41,11 +41,14 @@ Docker-based infrastructure for the complete Alfred project ecosystem.
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **Alfred Gateway** | 8000 | API Gateway (YARP) - Routes and authenticates requests |
-| **Alfred Identity** | 5001 | Identity & Authentication service |
-| **PostgreSQL** | 5432 | Primary database |
-| **Redis** | 6379 | Caching and session management |
-| **Nginx** | 80/443 | Reverse proxy (Production only) |
+| **Alfred Gateway** | 8000 | API Gateway (YARP), OIDC protocol proxy, per-service API routing |
+| **Alfred Identity** | 8100 / 8101 | Identity & Authentication service, HTTP health + optional mTLS HTTPS |
+| **Alfred Core** | 8200 / 8201 | Core business API, HTTP health + optional mTLS HTTPS |
+| **Alfred Notification** | 8300 / 8301 | Notification API/service worker |
+| **Alfred Identity Web** | 7100 | SSO portal / auth error UI |
+| **Alfred Core Web** | 7200 | Core application UI |
+| **PostgreSQL** | 5432 | Shared PostgreSQL instance with per-service databases |
+| **Redis** | 6379 | Cache, SSO session validation, token/session revocation |
 
 ### Management Tools (Development)
 
@@ -98,7 +101,11 @@ Docker-based infrastructure for the complete Alfred project ecosystem.
 ### Access Services
 
 - **API Gateway**: http://localhost:8000
-- **Identity API**: http://localhost:5001
+- **Identity API through Gateway**: http://localhost:8000/identity/v1/...
+- **Core API through Gateway**: http://localhost:8000/core/v1/...
+- **Gateway Docs**: http://localhost:8000/docs
+- **SSO Web**: http://localhost:7100
+- **Core Web**: http://localhost:7200
 - **pgAdmin**: http://localhost:5050 (email: admin@alfred.com, password: admin123)
 - **Redis Commander**: http://localhost:8081
 
@@ -111,9 +118,15 @@ The production environment uses mutual TLS (mTLS) for secure service-to-service 
 #### Quick Deploy
 
 ```bash
-# One command to deploy everything with mTLS
+# One command to deploy everything with BuildKit cache enabled
 cd alfred-infra
 make prod-deploy
+
+# Rebuild using cache only
+make prod-build
+
+# Force a clean rebuild when base images or lockfiles need a fresh build
+make prod-build-clean
 
 # Check deployment status
 make prod-health
@@ -121,6 +134,11 @@ make prod-health
 # View logs
 make prod-logs
 ```
+
+Build cache is enabled through Docker BuildKit cache mounts:
+- NuGet package cache for .NET services.
+- pnpm store cache for Node/Next services.
+- `.next/cache` cache for `alfred-identity-web` and `alfred-core-web` production builds.
 
 #### mTLS Architecture
 

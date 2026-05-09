@@ -2,7 +2,7 @@
 # Alfred Project - Docker Management Makefile
 # ============================================
 
-.PHONY: help dev prod build up down restart logs clean init-env init-ssl migrate seed
+.PHONY: help dev prod build build-clean up down restart logs clean init-env init-ssl migrate seed
 .PHONY: dev-up dev-down dev-restart dev-logs dev-tools dev-db-backup dev-db-restore
 .PHONY: prod-build prod-build-clean prod-up prod-down prod-restart prod-logs prod-deploy prod-deploy-clean prod-migrate prod-seed prod-health
 .PHONY: prod-db-backup prod-db-restore prod-init-db
@@ -74,11 +74,12 @@ help: ## Show this help message
 	@echo "  make redeploy-core-web      - Rebuild & redeploy Core Web only"
 	@echo ""
 	@echo "$(YELLOW)Utility Commands:$(NC)"
-	@echo "  make build            - Build all production service images"
+	@echo "  make build            - Build all production service images using cache"
 	@echo "  make ps               - Show running containers"
 	@echo "  make stats            - Show container resource usage"
 	@echo "  make health           - Check dev service health"
 	@echo "  make clean            - Clean up dev containers and volumes"
+	@echo "  make build-clean      - Force full rebuild without cache"
 	@echo "  make clean-all        - Deep clean (WARNING: removes ALL Alfred data)"
 	@echo "  make init-env         - Initialize environment files"
 
@@ -125,7 +126,7 @@ dev-tools: ## Start development tools (pgAdmin, Redis Commander)
 
 prod: init-env mtls-certs prod-build ## Start complete production environment with mTLS
 	@echo "$(GREEN)Starting Alfred Production Environment with mTLS...$(NC)"
-	@echo "MTLS_ENABLED=true" >> .env.prod
+	@grep -q "^MTLS_ENABLED=" .env.prod && sed -i.bak "s/^MTLS_ENABLED=.*/MTLS_ENABLED=true/" .env.prod || echo "MTLS_ENABLED=true" >> .env.prod
 	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 	@echo "$(GREEN)Production environment is running with mTLS enabled!$(NC)"
 	@echo ""
@@ -134,8 +135,8 @@ prod: init-env mtls-certs prod-build ## Start complete production environment wi
 	@echo "  - Identity HTTPS:  https://alfred-identity:8101 (mTLS)"
 	@echo "  - Core HTTPS:      https://alfred-core:8201 (mTLS)"
 
-prod-build: ## Build production images (uses Docker layer cache for speed)
-	@echo "$(GREEN)Building production images (with cache)...$(NC)"
+prod-build: ## Build production images using BuildKit cache mounts (fast)
+	@echo "$(GREEN)Building production images (BuildKit cache enabled)...$(NC)"
 	@START=$$(date +%s); \
 	docker compose -f docker-compose.prod.yml --env-file .env.prod build --parallel; \
 	END=$$(date +%s); \
@@ -167,8 +168,8 @@ prod-deploy: init-env mtls-certs prod-build ## Deploy full stack using Docker la
 	@echo "  - Identity (mTLS):   https://alfred-identity:8101"
 	@echo "  - Core (mTLS):       https://alfred-core:8201"
 	@echo "  - Notification:      http://alfred-notification:8300"
-	@echo "  - SSO Web:           http://localhost:3100"
-	@echo "  - Core Web:          http://localhost:3200"
+	@echo "  - SSO Web:           http://localhost:$${SSO_WEB_PORT:-7100}"
+	@echo "  - Core Web:          http://localhost:$${CORE_WEB_PORT:-7200}"
 	@echo ""
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Check health:  make prod-health"
@@ -311,10 +312,9 @@ prod-db-restore: ## Restore a prod DB from dump. Usage: make prod-db-restore SER
 # Build & Utility Commands
 # ============================================
 
-build: ## Build all production service images
-	@echo "$(GREEN)Building all production service images...$(NC)"
-	docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache
-	@echo "$(GREEN)Build completed!$(NC)"
+build: prod-build ## Build all production service images using cache
+
+build-clean: prod-build-clean ## Force full rebuild of production images without cache
 
 ps: ## Show running containers
 	@docker compose ps

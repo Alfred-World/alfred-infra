@@ -108,10 +108,17 @@ services:
       - APP_HOSTNAME=0.0.0.0
       - APP_PORT=8100
       # JWT / SSO
-      - JWT_ISSUER=${GATEWAY_URL:-https://gateway.test}
+      - JWT_ISSUER=${JWT_ISSUER:-https://gateway.test}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-alfred-ecosystem}
+      - JWT__ACCESSTOKENLIFETIMESECONDS=${JWT_ACCESS_TOKEN_LIFETIME_SECONDS:-900}
+      - JWT__REFRESHTOKENLIFETIMESECONDS=${JWT_REFRESH_TOKEN_LIFETIME_SECONDS:-604800}
       - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-gateway.test}
       - APP_SECRET_KEY=${APP_SECRET_KEY}
+      # Public URLs used by OAuth client seeding and redirect validation
+      - URLS_GATEWAY=${GATEWAY_URL:-https://gateway.test}
+      - URLS_SSO_WEB=${SSO_WEB_URL:-https://sso.test}
+      - URLS_CORE_WEB=${CORE_WEB_URL:-https://core.test}
+      # Legacy aliases kept for older configuration readers
       - Urls__Gateway=${GATEWAY_URL:-https://gateway.test}
       - Urls__SsoWeb=${SSO_WEB_URL:-https://sso.test}
       - Urls__CoreWeb=${CORE_WEB_URL:-https://core.test}
@@ -178,7 +185,10 @@ services:
       - APP_PORT=8200
       # JWT validation (must match gateway-issued tokens)
       - AUTH_AUTHORITY=http://alfred-identity:8100
-      - AUTH_VALID_ISSUER=${GATEWAY_URL:-https://gateway.test}
+      - AUTH_VALID_ISSUER=${JWT_ISSUER:-https://gateway.test}
+      - AUTH_REQUIRE_HTTPS_METADATA=${AUTH_REQUIRE_HTTPS_METADATA:-false}
+      - IDENTITY_USER_STREAM_KEY=${IDENTITY_USER_STREAM_KEY:-identity:user-events}
+      - IDENTITY_USER_STREAM_POLL_MS=${IDENTITY_USER_STREAM_POLL_MS:-2000}
       # Cloudflare R2 Storage
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
@@ -300,12 +310,18 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8000
       - AUTH_AUTHORITY=http://alfred-identity:8100
-      - AUTH_VALID_ISSUER=${GATEWAY_URL:-https://gateway.test}
+      - AUTH_VALID_ISSUER=${JWT_ISSUER:-https://gateway.test}
+      - AUTH_REQUIRE_HTTPS_METADATA=${AUTH_REQUIRE_HTTPS_METADATA:-false}
       - AUTH_AUDIENCE=${JWT_AUDIENCE:-alfred-ecosystem}
+      # Env-driven proxy config. Keep definitions in .env.prod so deploy can add/remove services without editing compose.
+      - DYNAMIC_PROXY__IDENTITY=${DYNAMIC_PROXY__IDENTITY}
+      - DYNAMIC_PROXY__CORE=${DYNAMIC_PROXY__CORE}
+      - DYNAMIC_PROXY__NOTIFICATION=${DYNAMIC_PROXY__NOTIFICATION:-}
+      # Legacy aliases kept as fallback if DYNAMIC_PROXY__* is removed.
       - IDENTITY_SERVICE_URL=http://alfred-identity:8100
       - CORE_SERVICE_URL=http://alfred-core:8200
       - NOTIFICATION_SERVICE_URL=http://alfred-notification:8300
-      # mTLS service URLs — used when MTLS_ENABLED=true (must point to HTTPS ports)
+      # mTLS service URLs — used by legacy fallback when MTLS_ENABLED=true.
       - IDENTITY_SERVICE_MTLS_URL=https://alfred-identity:8101
       - CORE_SERVICE_MTLS_URL=https://alfred-core:8201
       # Redis
@@ -320,7 +336,9 @@ services:
       - MTLS_CLIENT_CERT_PASSWORD=
       - MTLS_CA_CERT_PATH=/certs/ca/ca.crt
       - MTLS_SKIP_SERVER_CERT_VALIDATION=false
-      # Logging
+      # Health checks / logging
+      - HEALTH_CHECK_INTERVAL_SECONDS=${HEALTH_CHECK_INTERVAL_SECONDS:-30}
+      - HEALTH_CHECK_TIMEOUT_SECONDS=${HEALTH_CHECK_TIMEOUT_SECONDS:-10}
       - Logging__LogLevel__Default=Information
     volumes:
       - ./certificates:/certs:ro
@@ -378,6 +396,9 @@ services:
       # NEXT_PUBLIC_* must also be set at runtime for SSR (bracket notation bypasses build-time inlining)
       - NEXT_PUBLIC_APP_URL=${SSO_WEB_URL:-https://sso.test}
       - NEXT_PUBLIC_GATEWAY_URL=${GATEWAY_URL:-https://gateway.test}
+      - NEXT_PUBLIC_SSO_URL=${SSO_WEB_URL:-https://sso.test}
+      - NEXT_PUBLIC_CORE_URL=${CORE_WEB_URL:-https://core.test}
+      - NEXT_PUBLIC_OIDC_CLIENT_ID=${SSO_OIDC_CLIENT_ID:-sso_web}
       - NEXT_PUBLIC_OAUTH_CLIENT_ID=${SSO_OIDC_CLIENT_ID:-sso_web}
     networks:
       - alfred-network
@@ -427,6 +448,7 @@ services:
       - NEXT_PUBLIC_APP_URL=${CORE_WEB_URL:-https://core.test}
       - NEXT_PUBLIC_GATEWAY_URL=${GATEWAY_URL:-https://gateway.test}
       - NEXT_PUBLIC_SSO_URL=${SSO_WEB_URL:-https://sso.test}
+      - NEXT_PUBLIC_OIDC_CLIENT_ID=${CORE_OIDC_CLIENT_ID:-core_web}
       - NEXT_PUBLIC_OAUTH_CLIENT_ID=${CORE_OIDC_CLIENT_ID:-core_web}
     networks:
       - alfred-network
